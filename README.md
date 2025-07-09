@@ -33,19 +33,34 @@ An AI-powered NPC system built with Agno 0.15.x that enables interactive blacksm
 
 ## Quick Local Testing
 
-You can quickly test the NPC functionality using the provided test script:
+You can quickly test the NPC functionality using the provided standalone test script:
 
 1. Set your OpenAI API key:
    ```bash
+   # On Linux/Mac:
    export OPENAI_API_KEY=your_openai_api_key
+   
+   # On Windows (Command Prompt):
+   set OPENAI_API_KEY=your_openai_api_key
+   
+   # On Windows (PowerShell):
+   $env:OPENAI_API_KEY="your_openai_api_key"
    ```
 
-2. Run the test script:
+2. Make sure you have the OpenAI package installed:
    ```bash
-   python -m NPCango.quick_npc_test
+   pip install openai>=1.0.0
    ```
 
-3. The script will send 4 test messages to the NPC and print the responses.
+3. Run the test script:
+   ```bash
+   cd NPCango
+   python quick_npc_test.py
+   ```
+
+4. The script will send 4 test messages to the NPC and print the responses.
+
+> **Note**: The test script is a standalone implementation that doesn't rely on the agno package or other parts of the codebase. It directly uses the OpenAI API to simulate the NPC functionality, making it easier to run without dependency issues.
 
 ### Expected Output
 
