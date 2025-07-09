@@ -17,30 +17,203 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Memory storage (simple in-memory dict for this test)
-memory_store = {}
+import numpy as np
+import faiss
+import os
+import json
+from datetime import datetime
+
+class SimpleFaissMemory:
+    """
+    Simplified FAISS memory system that saves memories to a file.
+    """
+    
+    def __init__(self, index_path: str = "memory_faiss"):
+        """
+        Initialize the FAISS memory system.
+        
+        Args:
+            index_path: Path to save/load the FAISS index
+        """
+        self.index_path = index_path
+        self.embedding_dim = 1536  # OpenAI embedding dimension
+        
+        # Initialize FAISS index
+        self.index = faiss.IndexFlatL2(self.embedding_dim)
+        
+        # Memory storage
+        self.memories = []
+        
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(index_path) if os.path.dirname(index_path) else ".", exist_ok=True)
+        
+        # Load existing index if it exists
+        if os.path.exists(f"{index_path}.index") and os.path.exists(f"{index_path}.json"):
+            self.load(index_path)
+            print(f"[FAISS] Loaded {len(self.memories)} memories from {index_path}")
+        else:
+            print(f"[FAISS] Created new memory index at {index_path}")
+    
+    def _get_embedding(self, text: str) -> np.ndarray:
+        """
+        Get a simple embedding for text.
+        
+        In a real implementation, this would use OpenAI's embedding API.
+        Here we just create a random vector for demonstration.
+        """
+        # Create a random embedding (for demonstration only)
+        embedding = np.random.randn(self.embedding_dim).astype(np.float32)
+        # Normalize the embedding
+        embedding = embedding / np.linalg.norm(embedding)
+        return embedding
+    
+    def add(self, player_id: str, fact: str) -> bool:
+        """
+        Add a memory to the database.
+        
+        Args:
+            player_id: ID of the player this memory is associated with
+            fact: The text content of the memory
+            
+        Returns:
+            bool: True if memory was added
+        """
+        # Get embedding
+        embedding = self._get_embedding(fact)
+        
+        # Prepare memory object
+        memory = {
+            "player_id": player_id,
+            "text": fact,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        # Add to index and memories list
+        self.index.add(np.array([embedding], dtype=np.float32))
+        self.memories.append(memory)
+        
+        # Save index
+        self.save(self.index_path)
+        
+        # Print all memories for this player
+        self.print_memories(player_id)
+        
+        return True
+    
+    def search(self, query: str, player_id: str = None, limit: int = 5) -> list:
+        """
+        Search for relevant memories using the query text.
+        
+        Args:
+            query: The search query text
+            player_id: Optional player ID to filter results
+            limit: Maximum number of results to return
+            
+        Returns:
+            List of memory objects with similarity scores
+        """
+        if not self.memories:
+            return []
+        
+        # Get query embedding
+        query_embedding = self._get_embedding(query)
+        
+        # Search in FAISS index
+        D, I = self.index.search(
+            np.array([query_embedding], dtype=np.float32), 
+            min(limit * 2, len(self.memories))  # Get more results for filtering
+        )
+        
+        # Process results
+        results = []
+        for i, (distance, idx) in enumerate(zip(D[0], I[0])):
+            if idx >= len(self.memories):
+                continue
+                
+            memory = self.memories[idx]
+            
+            # Filter by player_id if provided
+            if player_id and memory["player_id"] != player_id:
+                continue
+            
+            # Convert distance to similarity score (FAISS returns L2 distance)
+            similarity = 1.0 / (1.0 + distance)
+            
+            # Add to results
+            results.append({
+                **memory,
+                "score": similarity
+            })
+            
+            # Stop if we have enough results after filtering
+            if len(results) >= limit:
+                break
+        
+        # Sort by score
+        results.sort(key=lambda x: x["score"], reverse=True)
+        
+        # Print all memories for this player
+        self.print_memories(player_id)
+        
+        return results[:limit]
+    
+    def print_memories(self, player_id: str = None):
+        """Print all memories for a player."""
+        if player_id:
+            player_memories = [m for m in self.memories if m["player_id"] == player_id]
+            print(f"\n[FAISS] All memories for player '{player_id}' ({len(player_memories)} total):")
+            for i, memory in enumerate(player_memories, 1):
+                print(f"  {i}. {memory['text']} (Added: {memory['timestamp']})")
+        else:
+            print(f"\n[FAISS] All memories ({len(self.memories)} total):")
+            for i, memory in enumerate(self.memories, 1):
+                print(f"  {i}. [{memory['player_id']}] {memory['text']} (Added: {memory['timestamp']})")
+    
+    def save(self, path: str):
+        """Save the FAISS index and memories to disk."""
+        # Save FAISS index
+        faiss.write_index(self.index, f"{path}.index")
+        
+        # Save memories
+        with open(f"{path}.json", "w") as f:
+            json.dump(self.memories, f)
+        
+        print(f"[FAISS] Saved {len(self.memories)} memories to {path}")
+    
+    def load(self, path: str):
+        """Load the FAISS index and memories from disk."""
+        # Load FAISS index
+        if os.path.exists(f"{path}.index"):
+            self.index = faiss.read_index(f"{path}.index")
+        
+        # Load memories
+        if os.path.exists(f"{path}.json"):
+            with open(f"{path}.json", "r") as f:
+                self.memories = json.load(f)
+
+# Initialize the FAISS memory system
+faiss_memory = SimpleFaissMemory("memory_faiss")
 
 def remember_fact(player_id: str, fact: str) -> str:
-    """Stub implementation of remember_fact tool."""
-    if player_id not in memory_store:
-        memory_store[player_id] = []
-    memory_store[player_id].append(fact)
+    """Implementation of remember_fact tool using FAISS."""
+    success = faiss_memory.add(player_id, fact)
     print(f"[Tool] remember_fact: Stored '{fact}' for player '{player_id}'")
     return f"I'll remember that {fact}"
 
 def recall_memory(player_id: str, query: str) -> str:
-    """Stub implementation of recall_memory tool."""
-    if player_id not in memory_store or not memory_store[player_id]:
+    """Implementation of recall_memory tool using FAISS."""
+    memories = faiss_memory.search(query, player_id=player_id)
+    
+    if not memories:
         print(f"[Tool] recall_memory: No memories found for player '{player_id}'")
         return "I don't recall anything about that."
     
-    memories = memory_store[player_id]
     print(f"[Tool] recall_memory: Found {len(memories)} memories for player '{player_id}'")
     
     # Format memories
     memory_texts = []
     for i, mem in enumerate(memories, 1):
-        memory_texts.append(f"[{i}] {mem} (Relevance: 0.95)")
+        memory_texts.append(f"[{i}] {mem['text']} (Relevance: {mem['score']:.2f})")
     
     return "Here's what I remember:\n" + "\n".join(memory_texts)
 

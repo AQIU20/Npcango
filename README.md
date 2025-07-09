@@ -47,9 +47,9 @@ You can quickly test the NPC functionality using the provided standalone test sc
    $env:OPENAI_API_KEY="your_openai_api_key"
    ```
 
-2. Make sure you have the OpenAI package installed:
+2. Make sure you have the required packages installed:
    ```bash
-   pip install openai>=1.0.0
+   pip install openai>=1.0.0 faiss-cpu numpy
    ```
 
 3. Run the test script:
@@ -67,6 +67,16 @@ You can quickly test the NPC functionality using the provided standalone test sc
 The test script will show:
 - Debug logs of tool calls
 - NPC responses to each message
+- FAISS memory operations and saved memories:
+  ```
+  [FAISS] Created new memory index at memory_faiss
+  [Tool] remember_fact: Stored '我叫李逍遥' for player 'player123'
+  
+  [FAISS] All memories for player 'player123' (1 total):
+    1. 我叫李逍遥 (Added: 2025-07-09T22:30:45.123456)
+  
+  [FAISS] Saved 1 memories to memory_faiss
+  ```
 - Stub inventory updates like: `[Stub] pretend to add 10x 钢锭 to player123`
 - Lore search results with source references like:
   ```
@@ -78,6 +88,11 @@ The test script will show:
   - 龙骨碎片 x1
   - 精工木柄 x1
   ```
+
+The script uses real FAISS for memory storage:
+- Memories are saved to disk in two files: `memory_faiss.index` (FAISS index) and `memory_faiss.json` (memory metadata)
+- All saved memories are printed each time a memory is added or searched
+- The memory persists between runs, so you can see how the NPC remembers information over time
 
 This test verifies that:
 1. The NPC can remember player names and recall them in later messages
